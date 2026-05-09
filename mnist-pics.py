@@ -1,4 +1,4 @@
-#mnist_pics.py
+#mnist-pics.py
 
 import streamlit as st
 import numpy as np
@@ -7,6 +7,10 @@ import os
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 
+
+import os
+
+st.write(os.getcwd())
 
 # =========================================
 # SKAPA MAPpar
