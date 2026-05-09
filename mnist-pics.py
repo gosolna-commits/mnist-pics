@@ -1,65 +1,227 @@
 #mnist_pics.py
 
+import streamlit as st
+import numpy as np
+import cv2
 
-from PIL import Image, ImageDraw
-import os
+from sklearn.datasets import fetch_openml
+from sklearn.model_selection import train_test_split
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score
 
-# Create dataset folders
-for i in range(10):
-    os.makedirs(f"data/{i}", exist_ok=True)
+from streamlit_drawable_canvas import st_canvas
 
-class MNISTDrawer:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("MNIST Drawing App")
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D
+from tensorflow.keras.layers import MaxPooling2D
+from tensorflow.keras.layers import Flatten
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.utils import to_categorical
 
-        self.canvas_size = 280  # large canvas for drawing
-        self.image_size = 28    # MNIST size
 
-        self.canvas = tk.Canvas(root, width=self.canvas_size, height=self.canvas_size, bg="black")
-        self.canvas.pack()
+# =========================================
+# STREAMLIT
+# =========================================
 
-        self.canvas.bind("<B1-Motion>", self.draw)
+st.set_page_config(page_title="MNIST MLP + CNN", layout="centered")
 
-        self.button_frame = tk.Frame(root)
-        self.button_frame.pack()
+st.title("Rita en siffra (0–9)")
 
-        for i in range(10):
-            btn = tk.Button(self.button_frame, text=str(i), command=lambda i=i: self.save(i))
-            btn.grid(row=0, column=i)
 
-        self.clear_btn = tk.Button(root, text="Clear", command=self.clear)
-        self.clear_btn.pack()
+# =========================================
+# LADDA DATA + TRÄNA MODELLER
+# =========================================
 
-        # PIL image for saving
-        self.image = Image.new("L", (self.canvas_size, self.canvas_size), 0)
-        self.draw_image = ImageDraw.Draw(self.image)
+@st.cache_resource
+def load_models():
 
-    def draw(self, event):
-        x, y = event.x, event.y
-        r = 8
+    mnist = fetch_openml("mnist_784", version=1)
 
-        self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="white", outline="white")
-        self.draw_image.ellipse([x-r, y-r, x+r, y+r], fill=255)
+    X = mnist.data.astype(np.float32).to_numpy()
+    y = mnist.target.astype(np.int32)
 
-    def clear(self):
-        self.canvas.delete("all")
-        self.image = Image.new("L", (self.canvas_size, self.canvas_size), 0)
-        self.draw_image = ImageDraw.Draw(self.image)
+    X = X / 255.0
 
-    def save(self, label):
-        # Resize to MNIST size
-        img = self.image.resize((self.image_size, self.image_size))
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42
+    )
 
-        # Save image
-        count = len(os.listdir(f"data/{label}"))
-        filename = f"data/{label}/{count}.png"
-        img.save(filename)
+    # =========================================
+    # MLP
+    # =========================================
 
-        print(f"Saved {filename}")
-        self.clear()
+    mlp = MLPClassifier(
+        hidden_layer_sizes=(128,),
+        max_iter=20,
+        random_state=42,
+        verbose=True
+    )
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = MNISTDrawer(root)
-    root.mainloop()
+    mlp.fit(X_train, y_train)
+
+    mlp_pred = mlp.predict(X_test)
+
+    mlp_acc = accuracy_score(y_test, mlp_pred)
+
+    # =========================================
+    # CNN
+    # =========================================
+
+    X_train_cnn = X_train.reshape(-1, 28, 28, 1)
+    X_test_cnn = X_test.reshape(-1, 28, 28, 1)
+
+    y_train_cat = to_categorical(y_train, 10)
+    y_test_cat = to_categorical(y_test, 10)
+
+    cnn = Sequential([
+
+        Conv2D(
+            32,
+            (3,3),
+            activation="relu",
+            input_shape=(28,28,1)
+        ),
+
+        MaxPooling2D((2,2)),
+
+        Conv2D(64, (3,3), activation="relu"),
+
+        MaxPooling2D((2,2)),
+
+        Flatten(),
+
+        Dense(128, activation="relu"),
+
+        Dense(10, activation="softmax")
+    ])
+
+    cnn.compile(
+        optimizer="adam",
+        loss="categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+
+    cnn.fit(
+        X_train_cnn,
+        y_train_cat,
+        epochs=3,
+        batch_size=64,
+        validation_split=0.1,
+        verbose=1
+    )
+
+    loss, cnn_acc = cnn.evaluate(
+        X_test_cnn,
+        y_test_cat,
+        verbose=0
+    )
+
+    return mlp, cnn, mlp_acc, cnn_acc
+
+
+with st.spinner("Tränar modeller första gången..."):
+
+    mlp_model, cnn_model, mlp_acc, cnn_acc = load_models()
+
+
+st.success(f"MLP accuracy: {mlp_acc:.4f}")
+st.success(f"CNN accuracy: {cnn_acc:.4f}")
+
+
+# =========================================
+# CANVAS
+# =========================================
+
+canvas_result = st_canvas(
+    fill_color="white",
+    stroke_width=15,
+    stroke_color="white",
+    background_color="black",
+    width=280,
+    height=280,
+    drawing_mode="freedraw",
+    key="canvas",
+)
+
+
+# =========================================
+# PREDIKTION
+# =========================================
+
+if st.button("Skicka"):
+
+    if canvas_result.image_data is not None:
+
+        img = canvas_result.image_data
+
+        # RGBA -> grayscale
+        img = cv2.cvtColor(
+            img.astype(np.uint8),
+            cv2.COLOR_RGBA2GRAY
+        )
+
+        # Resize till MNIST-format
+        img = cv2.resize(img, (28, 28))
+
+        # Blur
+        img = cv2.GaussianBlur(img, (3,3), 0)
+
+        # Normalisera
+        img = img / 255.0
+
+        # Kontroll om tom canvas
+        if np.sum(img) < 5:
+
+            st.warning("Rita en siffra först")
+
+        else:
+
+            # =========================================
+            # MLP
+            # =========================================
+
+            img_flat = img.reshape(1, 784)
+
+            mlp_probs = mlp_model.predict_proba(img_flat)[0]
+
+            mlp_pred = np.argmax(mlp_probs)
+
+            mlp_conf = mlp_probs[mlp_pred] * 100
+
+
+            # =========================================
+            # CNN
+            # =========================================
+
+            img_cnn = img.reshape(1, 28, 28, 1)
+
+            cnn_probs = cnn_model.predict(
+                img_cnn,
+                verbose=0
+            )[0]
+
+            cnn_pred = np.argmax(cnn_probs)
+
+            cnn_conf = cnn_probs[cnn_pred] * 100
+
+
+            # =========================================
+            # RESULTAT
+            # =========================================
+
+            st.markdown(
+                f"## MLP: {mlp_pred} ({mlp_conf:.1f}%)"
+            )
+
+            st.markdown(
+                f"## CNN: {cnn_pred} ({cnn_conf:.1f}%)"
+            )
+
+            st.image(
+                img,
+                width=150,
+                caption="28x28-bild som modellerna ser"
+            )
