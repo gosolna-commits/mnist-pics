@@ -29,7 +29,7 @@ for i in range(10):
 
 st.set_page_config(page_title="MNIST Drawing App")
 
-st.title("Rita en siffra och spara till dataset XXX")
+st.title("Rita en siffra och spara till dataset")
 
 label = st.selectbox(
     "Vilken siffra ritar du?",
