@@ -28,7 +28,7 @@ for i in range(10):
 # STREAMLIT
 # =========================================
 
-st.set_page_config(page_title="MNIST Drawing App")
+st.set_page_config(page_title="MNIST Drawing App XXX")
 
 st.title("Rita en siffra och spara till dataset")
 
