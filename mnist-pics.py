@@ -12,7 +12,6 @@ from streamlit_drawable_canvas import st_canvas
 
 import os
 
-IS_CLOUD = os.environ.get("STREAMLIT_SHARING_MODE") is not None
 
 st.write(os.getcwd())
 
@@ -28,9 +27,9 @@ for i in range(10):
 # STREAMLIT
 # =========================================
 
-st.set_page_config(page_title="MNIST Drawing App XXX")
+st.set_page_config(page_title="MNIST Drawing App")
 
-st.title("Rita en siffra och spara till dataset")
+st.title("Rita en siffra och spara till dataset XXX")
 
 label = st.selectbox(
     "Vilken siffra ritar du?",
@@ -73,10 +72,10 @@ if st.button("Spara bild"):
         img = img.resize((28, 28))
 
         # =====================================
-        # LOKAL KÖRNING
+        # FÖRSÖK SPARA LOKALT/SERVER
         # =====================================
 
-        if not IS_CLOUD:
+        try:
 
             os.makedirs(f"data/{label}", exist_ok=True)
 
@@ -86,32 +85,30 @@ if st.button("Spara bild"):
 
             img.save(filename)
 
-            st.success(f"Sparade lokalt: {filename}")
+            st.success(f"Sparade: {filename}")
+
+        except Exception as e:
+
+            st.warning(f"Kunde inte spara på servern: {e}")
 
         # =====================================
-        # CLOUD / DEPLOY
+        # DOWNLOAD-KNAPP
         # =====================================
 
-        else:
+        buffer = BytesIO()
 
-            buffer = BytesIO()
+        img.save(buffer, format="PNG")
 
-            img.save(buffer, format="PNG")
+        buffer.seek(0)
 
-            buffer.seek(0)
+        st.download_button(
+            label="Ladda ner bilden",
+            data=buffer,
+            file_name=f"mnist_{label}.png",
+            mime="image/png"
+        )
 
-            st.download_button(
-                label="Ladda ner bilden",
-                data=buffer,
-                file_name=f"mnist_{label}.png",
-                mime="image/png"
-            )
-
-            st.info(
-                "Deployad app kan inte spara direkt på din dator.\n"
-                "Använd download-knappen."
-            )
-
+        # Visa bilden
         st.image(
             img,
             caption="28x28-bild",
