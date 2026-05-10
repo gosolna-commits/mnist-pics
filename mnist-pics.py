@@ -1,14 +1,18 @@
 #mnist-pics.py
+# streamlit run mnist-pics.py
 
 import streamlit as st
 import numpy as np
 import os
 
+from io import BytesIO
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 
 
 import os
+
+IS_CLOUD = os.environ.get("STREAMLIT_SHARING_MODE") is not None
 
 st.write(os.getcwd())
 
@@ -68,24 +72,55 @@ if st.button("Spara bild"):
         # Resize till MNIST-format
         img = img.resize((28, 28))
 
-        # Spara
-        count = len(os.listdir(f"data/{label}"))
+        # =====================================
+        # LOKAL KÖRNING
+        # =====================================
 
-        filename = f"data/{label}/{count}.png"
+        if not IS_CLOUD:
 
-        img.save(filename)
+            os.makedirs(f"data/{label}", exist_ok=True)
 
-        st.success(f"Sparade: {filename}")
+            count = len(os.listdir(f"data/{label}"))
+
+            filename = f"data/{label}/{count}.png"
+
+            img.save(filename)
+
+            st.success(f"Sparade lokalt: {filename}")
+
+        # =====================================
+        # CLOUD / DEPLOY
+        # =====================================
+
+        else:
+
+            buffer = BytesIO()
+
+            img.save(buffer, format="PNG")
+
+            buffer.seek(0)
+
+            st.download_button(
+                label="Ladda ner bilden",
+                data=buffer,
+                file_name=f"mnist_{label}.png",
+                mime="image/png"
+            )
+
+            st.info(
+                "Deployad app kan inte spara direkt på din dator.\n"
+                "Använd download-knappen."
+            )
 
         st.image(
             img,
-            caption="Sparad 28x28-bild",
+            caption="28x28-bild",
             width=150
         )
 
     else:
 
         st.warning("Rita en siffra först")
-        
+      
         
 
